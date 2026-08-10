@@ -101,6 +101,7 @@ streamlit run app.py
    ขึ้น GitHub Repository ส่วนตัว
 2. เข้า [share.streamlit.io](https://share.streamlit.io) → New app → เลือก repo/branch
    → ตั้งค่า Main file path เป็น `app.py` → Deploy
+3. URL: https://nlpwebapp-pmjbuyb47rusf7nejqvxg9.streamlit.app/
 
 ---
 
