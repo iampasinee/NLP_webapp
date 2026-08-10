@@ -3,3 +3,4 @@ pythainlp
 pandas
 wordcloud
 matplotlib
+plotly
