@@ -17,6 +17,7 @@ from pythainlp.util import normalize
 from pythainlp.corpus.common import thai_stopwords
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
+import plotly.express as px
 
 FONT_PATH = os.path.join(os.path.dirname(__file__), "fonts", "NotoSansThai-Regular.ttf")
 
