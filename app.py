@@ -6,19 +6,27 @@
 
 import re
 import io
+import os
+from collections import Counter
 import pandas as pd
 import streamlit as st
 from pythainlp.tokenize import word_tokenize
 from pythainlp.tag import pos_tag
 from pythainlp.util import normalize
 from pythainlp.corpus.common import thai_stopwords
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
+
+FONT_PATH = os.path.join(os.path.dirname(__file__), "fonts", "NotoSansThai-Regular.ttf")
 
 # ---------------------------------------------------------------------------
 # 1) CONFIG / LEXICONS
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="ระบบคัดกรองรีวิวสินค้า/อาหาร", page_icon="🍽️", layout="wide")
 
-STOPWORDS = set(thai_stopwords()) | {"ค่ะ", "ครับ", "นะ", "จ้า", "จ้ะ", "อ่ะ", "555", "5555"}
+STOPWORDS = set(thai_stopwords()) | {"ค่ะ", "ครับ", "นะ", "จ้า", "จ้ะ", "อ่ะ", "555", "5555"} | {
+    "near", "at", "in", "on", "the", "this", "that", "from", "was", "is", "a", "an"
+}
 
 # คำบ่งชี้ร้าน/แบรนด์ (ไทย/อังกฤษ)
 BRAND_MARKERS = [r"ร้าน", r"แบรนด์", r"shop", r"brand", r"store"]
@@ -265,6 +273,58 @@ def analyze_review(text: str):
     }
 
 
+def build_word_frequencies(texts, top_n=100):
+    """รวม token จากรีวิวทั้งหมด นับความถี่ (ตัด stopword/เครื่องหมาย/ตัวเลขออก) สำหรับทำ Word Cloud"""
+    counter = Counter()
+    for text in texts:
+        cleaned, _, _ = clean_text(str(text))
+        tokens = word_tokenize(cleaned, engine="newmm")
+        for tok in tokens:
+            tok = normalize(tok).strip()
+            if not tok or tok in STOPWORDS or tok.isspace():
+                continue
+            if tok.isdigit() or not re.search(r"[ก-๙a-zA-Z]", tok):
+                continue
+            if len(tok) < 2:
+                continue
+            counter[tok] += 1
+    return dict(counter.most_common(top_n))
+
+
+def render_wordcloud(freqs):
+    if not freqs:
+        return None
+    wc = WordCloud(
+        font_path=FONT_PATH,
+        width=900,
+        height=450,
+        background_color="white",
+        colormap="viridis",
+        max_words=80,
+    ).generate_from_frequencies(freqs)
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    ax.imshow(wc, interpolation="bilinear")
+    ax.axis("off")
+    fig.tight_layout(pad=0)
+    return fig
+
+
+def get_top_n_from_column(series, n=10):
+    """นับความถี่จากคอลัมน์ที่เป็น comma-separated string (เช่น 'ส้มตำ, ต้มยำกุ้ง') คืนค่าเป็น DataFrame สำหรับ bar chart"""
+    counter = Counter()
+    for val in series:
+        if not val or val == "-":
+            continue
+        for item in str(val).split(","):
+            item = item.strip()
+            if item and item != "-":
+                counter[item] += 1
+    if not counter:
+        return pd.DataFrame(columns=["รายการ", "จำนวนครั้งที่พบ"])
+    top = counter.most_common(n)
+    return pd.DataFrame(top, columns=["รายการ", "จำนวนครั้งที่พบ"]).set_index("รายการ")
+
+
 # ---------------------------------------------------------------------------
 # 6) STREAMLIT UI
 # ---------------------------------------------------------------------------
@@ -283,6 +343,10 @@ with st.sidebar:
 - เมนูอาหาร/เครื่องดื่ม
 - คำชม / คำติ + แนวโน้มความคิดเห็นโดยรวม
 - หมวดหมู่ของรีวิว (รสชาติ, บริการ, ราคา, บรรยากาศ)
+
+**การวิเคราะห์แบบ batch ยังมี:**
+- Word Cloud คำที่พบบ่อยทั้งชุดข้อมูล
+- Top-N ร้าน/แบรนด์ และเมนูยอดนิยม
 
 **เทคนิค NLP ที่ใช้:**
 - Regex & Cleansing
@@ -385,6 +449,35 @@ with tab2:
                     st.markdown("#### สัดส่วนหมวดหมู่ (Topic)")
                     st.bar_chart(result_df["หมวดหมู่ (Topic)"].value_counts())
 
+                st.divider()
+                st.markdown("### ☁️ Word Cloud คำที่พบบ่อยในรีวิวทั้งหมด")
+                freqs = build_word_frequencies(df_input["review"].tolist())
+                fig = render_wordcloud(freqs)
+                if fig is not None:
+                    st.pyplot(fig, use_container_width=True)
+                else:
+                    st.info("ไม่มีคำที่นับได้เพียงพอสำหรับสร้าง Word Cloud")
+
+                st.divider()
+                st.markdown("### 🏆 Top-N ร้าน/แบรนด์ และเมนูที่ถูกพูดถึงมากที่สุด")
+                top_n = st.slider("จำนวนอันดับที่ต้องการแสดง (Top-N)", min_value=3, max_value=20, value=10)
+                col3, col4 = st.columns(2)
+                with col3:
+                    st.markdown("#### ร้าน/แบรนด์ยอดนิยม")
+                    top_brand_df = get_top_n_from_column(result_df["ชื่อแบรนด์/ร้าน"], n=top_n)
+                    if not top_brand_df.empty:
+                        st.bar_chart(top_brand_df)
+                    else:
+                        st.info("ไม่พบชื่อร้าน/แบรนด์ในรีวิวชุดนี้")
+                with col4:
+                    st.markdown("#### เมนูยอดนิยม")
+                    top_menu_df = get_top_n_from_column(result_df["เมนู"], n=top_n)
+                    if not top_menu_df.empty:
+                        st.bar_chart(top_menu_df)
+                    else:
+                        st.info("ไม่พบเมนูในรีวิวชุดนี้")
+
+                st.divider()
                 csv_buffer = io.StringIO()
                 result_df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
                 st.download_button(
