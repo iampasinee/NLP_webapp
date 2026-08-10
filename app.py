@@ -355,6 +355,7 @@ with st.sidebar:
 - เมนูอาหาร/เครื่องดื่ม
 - คำชม / คำติ + แนวโน้มความคิดเห็นโดยรวม
 - หมวดหมู่ของรีวิว (รสชาติ, บริการ, ราคา, บรรยากาศ)
+
 **เทคนิค NLP ที่ใช้:**
 - Regex & Cleansing
 - Tokenization & Normalization (PyThaiNLP)
