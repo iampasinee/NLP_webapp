@@ -1,3 +1,5 @@
 streamlit
 pythainlp
 pandas
+wordcloud
+matplotlib
